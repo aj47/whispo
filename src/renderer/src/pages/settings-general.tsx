@@ -32,11 +32,18 @@ import { Button } from "@renderer/components/ui/button"
 import {
   useConfigQuery,
   useSaveConfigMutation,
+  useIsMacSiliconQuery,
 } from "@renderer/lib/query-client"
+import { tipcClient } from "@renderer/lib/tipc-client"
+import { useState } from "react"
 import { Config } from "@shared/types"
 
 export function Component() {
   const configQuery = useConfigQuery()
+  const isMacSiliconQuery = useIsMacSiliconQuery()
+  const [isCheckingDeps, setIsCheckingDeps] = useState(false)
+  const [isInstallingDeps, setIsInstallingDeps] = useState(false)
+  const [depsInstalled, setDepsInstalled] = useState<boolean | null>(null)
 
   const saveConfigMutation = useSaveConfigMutation()
 
@@ -49,13 +56,54 @@ export function Component() {
     })
   }
 
+  const checkDependencies = async () => {
+    setIsCheckingDeps(true)
+    try {
+      const installed = await tipcClient.checkLightningWhisperDependencies()
+      setDepsInstalled(installed)
+    } catch (error) {
+      console.error("Failed to check dependencies:", error)
+      setDepsInstalled(false)
+    } finally {
+      setIsCheckingDeps(false)
+    }
+  }
+
+  const installDependencies = async () => {
+    setIsInstallingDeps(true)
+    try {
+      const success = await tipcClient.installLightningWhisperDependencies()
+      setDepsInstalled(success)
+      if (!success) {
+        alert("Failed to install lightning-whisper-mlx. Please install it manually using: pip install lightning-whisper-mlx")
+      }
+    } catch (error) {
+      console.error("Failed to install dependencies:", error)
+      alert("Failed to install lightning-whisper-mlx. Please install it manually using: pip install lightning-whisper-mlx")
+      setDepsInstalled(false)
+    } finally {
+      setIsInstallingDeps(false)
+    }
+  }
+
   const sttProviderId: STT_PROVIDER_ID =
     configQuery.data?.sttProviderId || "openai"
   const shortcut = configQuery.data?.shortcut || "hold-ctrl"
   const transcriptPostProcessingProviderId: CHAT_PROVIDER_ID =
     configQuery.data?.transcriptPostProcessingProviderId || "openai"
 
-  if (!configQuery.data) return null
+  // Filter STT providers based on platform
+  const availableSttProviders = STT_PROVIDERS.filter(provider => {
+    if (provider.value === "lightning-whisper-mlx") {
+      // Only show on Mac Silicon devices
+      return isMacSiliconQuery.data === true
+    }
+    return true
+  })
+
+
+
+  if (!configQuery.data || isMacSiliconQuery.isLoading) return null
 
   return (
     <div className="grid gap-4">
@@ -132,7 +180,7 @@ export function Component() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {STT_PROVIDERS.map((p) => (
+              {availableSttProviders.map((p) => (
                 <SelectItem key={p.value} value={p.value}>
                   {p.label}
                 </SelectItem>
@@ -140,6 +188,104 @@ export function Component() {
             </SelectContent>
           </Select>
         </Control>
+
+        {sttProviderId === "lightning-whisper-mlx" && (
+          <>
+            <Control label="Dependencies" className="px-3">
+              <div className="flex items-center gap-2">
+                {depsInstalled === null ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={checkDependencies}
+                    disabled={isCheckingDeps}
+                  >
+                    {isCheckingDeps ? "Checking..." : "Check Dependencies"}
+                  </Button>
+                ) : depsInstalled ? (
+                  <span className="text-green-600 text-sm">✓ Dependencies installed</span>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-600 text-sm">✗ Dependencies not installed</span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={installDependencies}
+                      disabled={isInstallingDeps}
+                    >
+                      {isInstallingDeps ? "Installing..." : "Install"}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Control>
+
+            <Control label="Model" className="px-3">
+              <Select
+                defaultValue={configQuery.data.lightningWhisperMlxModel || "distil-medium.en"}
+                onValueChange={(value) => {
+                  saveConfig({
+                    lightningWhisperMlxModel: value,
+                  })
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tiny">Tiny</SelectItem>
+                  <SelectItem value="small">Small</SelectItem>
+                  <SelectItem value="distil-small.en">Distil Small (English)</SelectItem>
+                  <SelectItem value="base">Base</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="distil-medium.en">Distil Medium (English)</SelectItem>
+                  <SelectItem value="large">Large</SelectItem>
+                  <SelectItem value="large-v2">Large v2</SelectItem>
+                  <SelectItem value="distil-large-v2">Distil Large v2</SelectItem>
+                  <SelectItem value="large-v3">Large v3</SelectItem>
+                  <SelectItem value="distil-large-v3">Distil Large v3</SelectItem>
+                </SelectContent>
+              </Select>
+            </Control>
+
+            <Control label="Batch Size" className="px-3">
+              <Input
+                type="number"
+                min="1"
+                max="32"
+                defaultValue={configQuery.data.lightningWhisperMlxBatchSize || 12}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value)
+                  if (!isNaN(value) && value > 0) {
+                    saveConfig({
+                      lightningWhisperMlxBatchSize: value,
+                    })
+                  }
+                }}
+              />
+            </Control>
+
+            <Control label="Quantization" className="px-3">
+              <Select
+                defaultValue={configQuery.data.lightningWhisperMlxQuant || "none"}
+                onValueChange={(value) => {
+                  saveConfig({
+                    lightningWhisperMlxQuant: value === "none" ? null : value as "4bit" | "8bit",
+                  })
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="4bit">4-bit</SelectItem>
+                  <SelectItem value="8bit">8-bit</SelectItem>
+                </SelectContent>
+              </Select>
+            </Control>
+          </>
+        )}
       </ControlGroup>
 
       <ControlGroup title="Transcript Post-Processing">

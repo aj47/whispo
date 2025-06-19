@@ -22,6 +22,10 @@ export type Config = {
   geminiApiKey?: string
   geminiBaseUrl?: string
 
+  lightningWhisperMlxModel?: string
+  lightningWhisperMlxBatchSize?: number
+  lightningWhisperMlxQuant?: "4bit" | "8bit" | null
+
   transcriptPostProcessingEnabled?: boolean
   transcriptPostProcessingProviderId?: CHAT_PROVIDER_ID
   transcriptPostProcessingPrompt?: string

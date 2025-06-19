@@ -16,8 +16,9 @@ import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript } from "./llm"
 import { state } from "./state"
 import { updateTrayIcon } from "./tray"
-import { isAccessibilityGranted } from "./utils"
+import { isAccessibilityGranted, isMacSilicon } from "./utils"
 import { writeText } from "./keyboard"
+import { transcribeWithLightningWhisper, checkLightningWhisperDependencies, installLightningWhisperDependencies } from "./lightning-whisper-service"
 
 const t = tipc.create()
 
@@ -126,6 +127,18 @@ export const router = {
     return isAccessibilityGranted()
   }),
 
+  isMacSilicon: t.procedure.action(async () => {
+    return isMacSilicon()
+  }),
+
+  checkLightningWhisperDependencies: t.procedure.action(async () => {
+    return checkLightningWhisperDependencies()
+  }),
+
+  installLightningWhisperDependencies: t.procedure.action(async () => {
+    return installLightningWhisperDependencies()
+  }),
+
   requestAccesssbilityAccess: t.procedure.action(async () => {
     if (process.platform === "win32") return true
 
@@ -156,41 +169,93 @@ export const router = {
       fs.mkdirSync(recordingsFolder, { recursive: true })
 
       const config = configStore.get()
-      const form = new FormData()
-      form.append(
-        "file",
-        new File([input.recording], "recording.webm", { type: "audio/webm" }),
-      )
-      form.append(
-        "model",
-        config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
-      )
-      form.append("response_format", "json")
+      let transcript: string
 
-      const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
-      const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+      if (config.sttProviderId === "lightning-whisper-mlx") {
+        // Use lightning-whisper-mlx for transcription
+        try {
+          const result = await transcribeWithLightningWhisper(input.recording, {
+            model: config.lightningWhisperMlxModel || "distil-medium.en",
+            batchSize: config.lightningWhisperMlxBatchSize || 12,
+            quant: config.lightningWhisperMlxQuant || null,
+          })
 
-      const transcriptResponse = await fetch(
-        config.sttProviderId === "groq"
-          ? `${groqBaseUrl}/audio/transcriptions`
-          : `${openaiBaseUrl}/audio/transcriptions`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+          if (!result.success) {
+            throw new Error(result.error || "Lightning Whisper MLX transcription failed")
+          }
+
+          transcript = await postProcessTranscript(result.text || "")
+        } catch (error) {
+          console.error("Lightning Whisper MLX failed, falling back to OpenAI:", error)
+
+          // Fallback to OpenAI if lightning-whisper-mlx fails
+          const form = new FormData()
+          form.append(
+            "file",
+            new File([input.recording], "recording.webm", { type: "audio/webm" }),
+          )
+          form.append("model", "whisper-1")
+          form.append("response_format", "json")
+
+          const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+          const transcriptResponse = await fetch(
+            `${openaiBaseUrl}/audio/transcriptions`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${config.openaiApiKey}`,
+              },
+              body: form,
+            },
+          )
+
+          if (!transcriptResponse.ok) {
+            const message = `Fallback transcription failed: ${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+            throw new Error(message)
+          }
+
+          const json: { text: string } = await transcriptResponse.json()
+          transcript = await postProcessTranscript(json.text)
+        }
+      } else {
+        // Use OpenAI or Groq for transcription
+        const form = new FormData()
+        form.append(
+          "file",
+          new File([input.recording], "recording.webm", { type: "audio/webm" }),
+        )
+        form.append(
+          "model",
+          config.sttProviderId === "groq" ? "whisper-large-v3" : "whisper-1",
+        )
+        form.append("response_format", "json")
+
+        const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
+        const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
+
+        const transcriptResponse = await fetch(
+          config.sttProviderId === "groq"
+            ? `${groqBaseUrl}/audio/transcriptions`
+            : `${openaiBaseUrl}/audio/transcriptions`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${config.sttProviderId === "groq" ? config.groqApiKey : config.openaiApiKey}`,
+            },
+            body: form,
           },
-          body: form,
-        },
-      )
+        )
 
-      if (!transcriptResponse.ok) {
-        const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
+        if (!transcriptResponse.ok) {
+          const message = `${transcriptResponse.statusText} ${(await transcriptResponse.text()).slice(0, 300)}`
 
-        throw new Error(message)
+          throw new Error(message)
+        }
+
+        const json: { text: string } = await transcriptResponse.json()
+        transcript = await postProcessTranscript(json.text)
       }
-
-      const json: { text: string } = await transcriptResponse.json()
-      const transcript = await postProcessTranscript(json.text)
 
       const history = getRecordingHistory()
       const item: RecordingHistoryItem = {

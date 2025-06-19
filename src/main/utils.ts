@@ -5,3 +5,7 @@ export const isAccessibilityGranted = () => {
 
   return systemPreferences.isTrustedAccessibilityClient(false)
 }
+
+export const isMacSilicon = () => {
+  return process.platform === "darwin" && process.arch === "arm64"
+}

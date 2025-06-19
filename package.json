@@ -22,7 +22,8 @@
     "build:linux": "electron-vite build && electron-builder --linux --config electron-builder.config.cjs",
     "release": "node ./scripts/release.js",
     "fix-pnpm-windows": "node ./scripts/fix-pnpm-windows.js",
-    "build-rs": "sh scripts/build-rs.sh"
+    "build-rs": "sh scripts/build-rs.sh",
+    "test-lightning-whisper": "node ./scripts/test-lightning-whisper-integration.js"
   },
   "dependencies": {
     "@egoist/electron-panel-window": "^8.0.3"
