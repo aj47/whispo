@@ -42,6 +42,27 @@ If automatic installation fails, install manually:
 pip install lightning-whisper-mlx
 ```
 
+## Model Management
+
+**Important**: Model files are **not** stored in the Whispo repository. They are downloaded automatically by lightning-whisper-mlx when first used.
+
+### Model Storage
+
+- Models are downloaded to: `~/.cache/huggingface/transformers/`
+- First use of each model will trigger automatic download
+- Model files can be large (70MB+ for some models)
+- Models are cached locally for subsequent use
+
+### Repository Policy
+
+The Whispo repository excludes:
+- Model files (*.npz, *.safetensors, *.bin, etc.)
+- Model cache directories
+- Python cache files
+- Temporary files
+
+This keeps the repository lightweight and ensures users get the latest model versions.
+
 ## Configuration Options
 
 ### Model Selection
