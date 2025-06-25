@@ -189,6 +189,21 @@ export function Component() {
           </Select>
         </Control>
 
+        {sttProviderId === "groq" && (
+          <Control label="Prompt" className="px-3">
+            <Textarea
+              placeholder="Optional prompt to guide the model's style or specify how to spell unfamiliar words (limited to 224 tokens)"
+              defaultValue={configQuery.data.groqSttPrompt || ""}
+              onChange={(e) => {
+                saveConfig({
+                  groqSttPrompt: e.currentTarget.value,
+                })
+              }}
+              className="min-h-[80px]"
+            />
+          </Control>
+        )}
+
         {sttProviderId === "lightning-whisper-mlx" && (
           <>
             <Control label="Dependencies" className="px-3">
