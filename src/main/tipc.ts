@@ -231,6 +231,11 @@ export const router = {
         )
         form.append("response_format", "json")
 
+        // Add prompt parameter for Groq if provided
+        if (config.sttProviderId === "groq" && config.groqSttPrompt?.trim()) {
+          form.append("prompt", config.groqSttPrompt.trim())
+        }
+
         const groqBaseUrl = config.groqBaseUrl || "https://api.groq.com/openai/v1"
         const openaiBaseUrl = config.openaiBaseUrl || "https://api.openai.com/v1"
 

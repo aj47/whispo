@@ -18,6 +18,7 @@ export type Config = {
 
   groqApiKey?: string
   groqBaseUrl?: string
+  groqSttPrompt?: string
 
   geminiApiKey?: string
   geminiBaseUrl?: string
