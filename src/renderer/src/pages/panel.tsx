@@ -5,6 +5,8 @@ import { cn } from "@renderer/lib/utils"
 import { useMutation } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { rendererHandlers, tipcClient } from "~/lib/tipc-client"
+import { McpToolCallingModal } from "@renderer/components/mcp-tool-calling-modal"
+import { useConfigQuery } from "@renderer/lib/query-client"
 
 const VISUALIZER_BUFFER_LENGTH = 70
 
@@ -16,7 +18,9 @@ export function Component() {
     getInitialVisualizerData(),
   )
   const [recording, setRecording] = useState(false)
+  const [showMcpModal, setShowMcpModal] = useState(false)
   const isConfirmedRef = useRef(false)
+  const configQuery = useConfigQuery()
 
   const transcribeMutation = useMutation({
     mutationFn: async ({
@@ -120,6 +124,16 @@ export function Component() {
     return unlisten
   }, [recording])
 
+  useEffect(() => {
+    const unlisten = rendererHandlers.openMcpToolCalling.listen(() => {
+      setShowMcpModal(true)
+    })
+
+    return unlisten
+  }, [])
+
+  const mcpToolCallingEnabled = configQuery.data?.mcpToolCallingEnabled || false
+
   return (
     <div className="flex h-screen dark:text-white">
       {transcribeMutation.isPending ? (
@@ -128,7 +142,17 @@ export function Component() {
         </div>
       ) : (
         <div className="flex h-full w-full rounded-xl transition-colors">
-          <div className="flex shrink-0"></div>
+          <div className="flex shrink-0">
+            {mcpToolCallingEnabled && (
+              <button
+                className="flex items-center justify-center w-8 h-full bg-blue-500 hover:bg-blue-600 text-white rounded-l-xl transition-colors"
+                onClick={() => setShowMcpModal(true)}
+                title="Open MCP Tool Calling"
+              >
+                <span className="i-mingcute-tool-fill text-sm"></span>
+              </button>
+            )}
+          </div>
           <div
             className="relative flex grow items-center overflow-hidden"
             dir="rtl"
@@ -156,6 +180,11 @@ export function Component() {
           </div>
         </div>
       )}
+
+      <McpToolCallingModal
+        open={showMcpModal}
+        onOpenChange={setShowMcpModal}
+      />
     </div>
   )
 }

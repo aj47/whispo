@@ -18,7 +18,9 @@ import { state } from "./state"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted, isMacSilicon } from "./utils"
 import { writeText } from "./keyboard"
+import { mcpService } from "./mcp-service"
 import { transcribeWithLightningWhisper, checkLightningWhisperDependencies, installLightningWhisperDependencies } from "./lightning-whisper-service"
+import { mcpClientManager } from "./mcp-client"
 
 const t = tipc.create()
 
@@ -337,6 +339,31 @@ export const router = {
       }
       updateTrayIcon()
     }),
+
+  // MCP Tool Calling endpoints
+  initializeMcp: t.procedure
+    .input<{ configPath?: string }>()
+    .action(async ({ input }) => {
+      await mcpService.initialize(input.configPath)
+    }),
+
+  getMcpTools: t.procedure.action(async () => {
+    return await mcpService.getAllTools()
+  }),
+
+  callMcpTool: t.procedure
+    .input<{ toolName: string; serverId: string; arguments: any }>()
+    .action(async ({ input }) => {
+      return await mcpService.callTool(input.toolName, input.serverId, input.arguments)
+    }),
+
+  getMcpServers: t.procedure.action(async () => {
+    return mcpService.getConnectedServers()
+  }),
+
+  disconnectMcp: t.procedure.action(async () => {
+    await mcpService.disconnect()
+  }),
 }
 
 export type Router = typeof router

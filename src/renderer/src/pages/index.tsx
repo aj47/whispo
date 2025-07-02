@@ -2,7 +2,7 @@ import { ControlGroup } from "@renderer/components/ui/control"
 import { queryClient } from "@renderer/lib/query-client"
 import { rendererHandlers, tipcClient } from "@renderer/lib/tipc-client"
 import { cn } from "@renderer/lib/utils"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation } from "@tanstack/react-query"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { RecordingHistoryItem } from "@shared/types"
 import dayjs from "dayjs"
@@ -141,7 +141,7 @@ export function Component() {
                         </div>
                         <div className="flex shrink-0 gap-2 text-sm">
                           <PlayButton id={item.id} />
-
+                          <McpToolButton transcript={item.transcript} />
                           <DeleteButton id={item.id} />
                         </div>
                       </div>
@@ -229,5 +229,73 @@ const DeleteButton = ({ id }: { id: string }) => {
     >
       <span className="i-mingcute-delete-2-fill"></span>
     </button>
+  )
+}
+
+const McpToolButton = ({ transcript }: { transcript: string }) => {
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  const configQuery = useQuery({
+    queryKey: ["config"],
+    queryFn: async () => {
+      return tipcClient.getConfig()
+    },
+  })
+
+  const processWithMcpMutation = useMutation({
+    mutationFn: tipcClient.processTranscriptWithMcp,
+    onMutate: () => {
+      setIsProcessing(true)
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        // Copy processed transcript to clipboard or write to active window
+        navigator.clipboard.writeText(data.transcript).catch(() => {
+          // Fallback: show the result in an alert
+          alert(`Processed text: ${data.transcript}`)
+        })
+      } else {
+        alert(`Error: ${data.error}`)
+      }
+    },
+    onError: (error) => {
+      alert(`Error processing with MCP: ${error}`)
+    },
+    onSettled: () => {
+      setIsProcessing(false)
+    },
+  })
+
+  // Don't show button if MCP is not enabled
+  if (!configQuery.data?.mcpToolCallingEnabled) {
+    return null
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip delayDuration={0} disableHoverableContent>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={itemButtonVariants()}
+            onClick={() => {
+              processWithMcpMutation.mutate({ transcript })
+            }}
+            disabled={isProcessing || processWithMcpMutation.isPending}
+          >
+            <span
+              className={cn(
+                isProcessing
+                  ? "i-mingcute-loading-line animate-spin"
+                  : "i-mingcute-tool-line"
+              )}
+            ></span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {isProcessing ? "Processing with MCP tools..." : "Process with MCP tools"}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }

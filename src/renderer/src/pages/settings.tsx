@@ -12,6 +12,10 @@ export function Component() {
       href: "/settings/providers",
     },
     {
+      text: "MCP Tools",
+      href: "/settings/mcp",
+    },
+    {
       text: "Data",
       href: "/settings/data",
     },

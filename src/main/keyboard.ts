@@ -20,7 +20,7 @@ const rdevPath = path
 type RdevEvent = {
   event_type: "KeyPress" | "KeyRelease"
   data: {
-    key: "ControlLeft" | "BackSlash" | string
+    key: "ControlLeft" | "BackSlash" | "AltLeft" | "ShiftLeft" | string
   }
   time: {
     secs_since_epoch: number
@@ -88,6 +88,9 @@ export function listenToKeyboardEvents() {
   let isHoldingCtrlKey = false
   let startRecordingTimer: NodeJS.Timeout | undefined
   let isPressedCtrlKey = false
+  let isPressedAltKey = false
+  let isPressedShiftKey = false
+  let startMcpToolCallingTimer: NodeJS.Timeout | undefined
 
   if (process.env.IS_MAC) {
     if (!systemPreferences.isTrustedAccessibilityClient(false)) {
@@ -102,10 +105,25 @@ export function listenToKeyboardEvents() {
     }
   }
 
+  const cancelMcpToolCallingTimer = () => {
+    if (startMcpToolCallingTimer) {
+      clearTimeout(startMcpToolCallingTimer)
+      startMcpToolCallingTimer = undefined
+    }
+  }
+
   const handleEvent = (e: RdevEvent) => {
+    const config = configStore.get()
+
     if (e.event_type === "KeyPress") {
       if (e.data.key === "ControlLeft") {
         isPressedCtrlKey = true
+      }
+      if (e.data.key === "AltLeft") {
+        isPressedAltKey = true
+      }
+      if (e.data.key === "ShiftLeft") {
+        isPressedShiftKey = true
       }
 
       if (e.data.key === "Escape" && state.isRecording) {
@@ -115,6 +133,32 @@ export function listenToKeyboardEvents() {
         }
 
         return
+      }
+
+      // Handle MCP tool calling shortcuts
+      if (config.mcpToolCallingEnabled) {
+        const mcpShortcut = config.mcpToolCallingShortcut || "hold-alt"
+
+        if (mcpShortcut === "alt-slash" && e.data.key === "Slash" && isPressedAltKey) {
+          getWindowRendererHandlers("panel")?.openMcpToolCalling.send()
+          return
+        } else if (mcpShortcut === "ctrl-shift" && isPressedCtrlKey && isPressedShiftKey) {
+          getWindowRendererHandlers("panel")?.openMcpToolCalling.send()
+          return
+        } else if (mcpShortcut === "hold-alt" && e.data.key === "AltLeft") {
+          if (hasRecentKeyPress()) {
+            return
+          }
+
+          if (startMcpToolCallingTimer) {
+            return
+          }
+
+          startMcpToolCallingTimer = setTimeout(() => {
+            getWindowRendererHandlers("panel")?.openMcpToolCalling.send()
+          }, 800)
+          return
+        }
       }
 
       if (configStore.get().shortcut === "ctrl-slash") {
@@ -145,6 +189,7 @@ export function listenToKeyboardEvents() {
         } else {
           keysPressed.set(e.data.key, e.time.secs_since_epoch)
           cancelRecordingTimer()
+          cancelMcpToolCallingTimer()
 
           // when holding ctrl key, pressing any other key will stop recording
           if (isHoldingCtrlKey) {
@@ -159,6 +204,13 @@ export function listenToKeyboardEvents() {
 
       if (e.data.key === "ControlLeft") {
         isPressedCtrlKey = false
+      }
+      if (e.data.key === "AltLeft") {
+        isPressedAltKey = false
+        cancelMcpToolCallingTimer()
+      }
+      if (e.data.key === "ShiftLeft") {
+        isPressedShiftKey = false
       }
 
       if (configStore.get().shortcut === "ctrl-slash") return

@@ -14,6 +14,8 @@ import { registerServeProtocol, registerServeSchema } from "./serve"
 import { createAppMenu } from "./menu"
 import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
+import { mcpService } from "./mcp-service"
+import { configStore } from "./config"
 
 registerServeSchema()
 
@@ -44,7 +46,24 @@ app.whenReady().then(() => {
 
   initTray()
 
+  // Initialize MCP service if enabled
+  const config = configStore.get()
+  if (config.mcpToolCallingEnabled && config.mcpServersConfigPath) {
+    mcpService.initialize(config.mcpServersConfigPath).catch(console.error)
+  }
+
   import("./updater").then((res) => res.init()).catch(console.error)
+
+  // Initialize MCP client manager
+  import("./mcp-client").then(({ mcpClientManager }) => {
+    // Auto-connect to MCP servers if enabled
+    const config = require("./config").configStore.get()
+    if (config.mcpToolCallingEnabled) {
+      mcpClientManager.connectToAllServers().catch((error) => {
+        console.error("Failed to auto-connect to MCP servers:", error)
+      })
+    }
+  }).catch(console.error)
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
