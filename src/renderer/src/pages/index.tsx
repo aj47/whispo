@@ -248,14 +248,14 @@ const McpToolButton = ({ transcript }: { transcript: string }) => {
       setIsProcessing(true)
     },
     onSuccess: (data) => {
-      if (data.success) {
+      if (data.success && data.transcript) {
         // Copy processed transcript to clipboard or write to active window
         navigator.clipboard.writeText(data.transcript).catch(() => {
           // Fallback: show the result in an alert
           alert(`Processed text: ${data.transcript}`)
         })
       } else {
-        alert(`Error: ${data.error}`)
+        alert(`Error: ${data.error || 'Unknown error'}`)
       }
     },
     onError: (error) => {

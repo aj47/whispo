@@ -364,6 +364,24 @@ export const router = {
   disconnectMcp: t.procedure.action(async () => {
     await mcpService.disconnect()
   }),
+
+  processTranscriptWithMcp: t.procedure
+    .input<{ transcript: string }>()
+    .action(async ({ input }) => {
+      try {
+        const processedTranscript = await mcpClientManager.processTranscriptWithTools(input.transcript)
+        return {
+          success: true,
+          transcript: processedTranscript
+        }
+      } catch (error) {
+        console.error("Error processing transcript with MCP:", error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Unknown error"
+        }
+      }
+    }),
 }
 
 export type Router = typeof router

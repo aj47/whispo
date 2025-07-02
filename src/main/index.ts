@@ -57,7 +57,7 @@ app.whenReady().then(() => {
   // Initialize MCP client manager
   import("./mcp-client").then(({ mcpClientManager }) => {
     // Auto-connect to MCP servers if enabled
-    const config = require("./config").configStore.get()
+    const config = configStore.get()
     if (config.mcpToolCallingEnabled) {
       mcpClientManager.connectToAllServers().catch((error) => {
         console.error("Failed to auto-connect to MCP servers:", error)
