@@ -38,6 +38,7 @@ export type Config = {
   mcpToolCallingEnabled?: boolean
   mcpToolCallingShortcut?: "hold-ctrl" | "ctrl-slash"
   mcpServersConfigPath?: string
+  mcpLLMToolSelectionEnabled?: boolean
 }
 
 export type McpServerConfig = {

@@ -155,6 +155,23 @@ export function Component() {
             }}
           />
         </Control>
+
+        <Control label="LLM-Driven Tool Selection" className="px-3">
+          <div className="space-y-2">
+            <Switch
+              defaultChecked={configQuery.data.mcpLLMToolSelectionEnabled !== false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  mcpLLMToolSelectionEnabled: value,
+                })
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Use the post-processing LLM to intelligently select and configure MCP tools based on speech content.
+              When disabled, falls back to simple heuristic-based tool selection.
+            </p>
+          </div>
+        </Control>
       </ControlGroup>
 
       <ControlGroup title="Server Management">

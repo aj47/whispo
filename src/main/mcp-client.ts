@@ -5,6 +5,7 @@ import { McpServerConfig, McpServersConfig } from "@shared/types"
 import fs from "fs"
 import path from "path"
 import { app } from "electron"
+import { selectToolsWithLLM, AvailableTool } from "./mcp-tool-selection"
 
 export class McpClientManager {
   private clients: Map<string, Client> = new Map()
@@ -172,20 +173,99 @@ export class McpClientManager {
   }
 
   async processTranscriptWithTools(transcript: string): Promise<string> {
+    const config = configStore.get()
+
+    // Check if LLM-driven tool calling is enabled (we'll add this config option)
+    const useLLMToolSelection = config.mcpLLMToolSelectionEnabled !== false // Default to true
+
+    if (useLLMToolSelection) {
+      return this.processTranscriptWithLLMSelection(transcript)
+    } else {
+      return this.processTranscriptWithHeuristics(transcript)
+    }
+  }
+
+  private async processTranscriptWithLLMSelection(transcript: string): Promise<string> {
+    try {
+      const availableToolsData = await this.listAvailableTools()
+
+      if (availableToolsData.length === 0) {
+        console.log("No MCP tools available")
+        return transcript
+      }
+
+      // Convert to the format expected by the LLM tool selection
+      const availableTools: AvailableTool[] = []
+      for (const { serverName, tools } of availableToolsData) {
+        for (const tool of tools) {
+          availableTools.push({
+            serverName,
+            name: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema
+          })
+        }
+      }
+
+      // Use LLM to select appropriate tools
+      const toolSelection = await selectToolsWithLLM(transcript, availableTools)
+
+      console.log("LLM tool selection result:", toolSelection)
+
+      if (!toolSelection.shouldUseTool || toolSelection.selectedTools.length === 0) {
+        console.log("LLM determined no tools should be used:", toolSelection.reasoning)
+        return transcript
+      }
+
+      // Execute selected tools in priority order
+      const sortedTools = toolSelection.selectedTools.sort((a, b) => a.priority - b.priority)
+      let processedTranscript = transcript
+
+      for (const selectedTool of sortedTools) {
+        try {
+          console.log(`Calling tool ${selectedTool.toolName} on server ${selectedTool.serverName}`)
+          const result = await this.callTool(
+            selectedTool.serverName,
+            selectedTool.toolName,
+            selectedTool.arguments
+          )
+
+          // Extract text from the result
+          if (result.content && Array.isArray(result.content)) {
+            const textContent = result.content.find((item: any) => item.type === 'text')
+            if (textContent) {
+              processedTranscript = textContent.text
+              console.log(`Tool ${selectedTool.toolName} processed transcript successfully`)
+              // For now, we'll use the result from the first successful tool
+              // In the future, we might chain tools or combine results
+              break
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to call tool ${selectedTool.toolName}:`, error)
+          // Continue with next tool
+        }
+      }
+
+      return processedTranscript
+    } catch (error) {
+      console.error("LLM tool selection failed, falling back to heuristics:", error)
+      return this.processTranscriptWithHeuristics(transcript)
+    }
+  }
+
+  private async processTranscriptWithHeuristics(transcript: string): Promise<string> {
     const availableTools = await this.listAvailableTools()
-    
+
     if (availableTools.length === 0) {
       console.log("No MCP tools available")
       return transcript
     }
 
-    // For now, we'll implement a simple approach where we try to find a relevant tool
-    // In a more sophisticated implementation, you might use an LLM to determine which tools to call
-    
-    // Look for a "process_text" or "enhance_text" tool
+    // Look for a "process_text" or "enhance_text" tool (original heuristic approach)
     for (const { serverName, tools } of availableTools) {
-      const processTextTool = tools.find(tool => 
-        tool.name.toLowerCase().includes('process') || 
+      const processTextTool = tools.find(tool =>
+        tool.name.toLowerCase().includes('process') ||
         tool.name.toLowerCase().includes('enhance') ||
         tool.name.toLowerCase().includes('text')
       )
@@ -193,7 +273,7 @@ export class McpClientManager {
       if (processTextTool) {
         try {
           const result = await this.callTool(serverName, processTextTool.name, { text: transcript })
-          
+
           // Extract text from the result
           if (result.content && Array.isArray(result.content)) {
             const textContent = result.content.find((item: any) => item.type === 'text')

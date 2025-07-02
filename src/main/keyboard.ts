@@ -57,34 +57,44 @@ export const writeText = (text: string) => {
 }
 
 const processMcpShortcut = async () => {
+  console.log("🎯 === MCP Shortcut Processing Started ===")
   try {
     const { mcpClientManager } = await import("./mcp-client")
     const { clipboard } = await import("electron")
     const { isAccessibilityGranted } = await import("./utils")
 
     const clipboardText = clipboard.readText()
+    console.log("📋 Clipboard content:", clipboardText ? `"${clipboardText.slice(0, 50)}..."` : "EMPTY")
+
     if (!clipboardText.trim()) {
-      console.log("MCP shortcut triggered but clipboard is empty")
+      console.log("❌ MCP shortcut triggered but clipboard is empty")
       return
     }
 
-    console.log("Processing clipboard content with MCP tools")
+    console.log("🔧 Connected MCP servers:", mcpClientManager.getConnectedServers())
+    console.log("🚀 Processing clipboard content with MCP tools...")
+
     const processedText = await mcpClientManager.processTranscriptWithTools(clipboardText)
+    console.log("✅ Processed text:", processedText ? `"${processedText.slice(0, 50)}..."` : "EMPTY")
 
     // Write the processed text back to clipboard and try to write to active window
     clipboard.writeText(processedText)
     if (isAccessibilityGranted()) {
       try {
         await writeText(processedText)
+        console.log("✅ Text written to active window")
       } catch (error) {
-        console.error(`Failed to write processed text:`, error)
+        console.error(`❌ Failed to write processed text:`, error)
       }
+    } else {
+      console.log("⚠️ Accessibility not granted, only updated clipboard")
     }
 
-    console.log("MCP processing completed")
+    console.log("🎉 MCP processing completed successfully")
   } catch (error) {
-    console.error("Failed to process clipboard with MCP:", error)
+    console.error("❌ Failed to process clipboard with MCP:", error)
   }
+  console.log("🏁 === MCP Shortcut Processing Ended ===")
 }
 
 const parseEvent = (event: any) => {
@@ -146,6 +156,13 @@ export function listenToKeyboardEvents() {
     if (e.event_type === "KeyPress") {
       if (e.data.key === "ControlLeft") {
         isPressedCtrlKey = true
+        console.log("🎯 ControlLeft pressed, checking MCP config...")
+        const config = configStore.get()
+        console.log("MCP Config:", {
+          mcpToolCallingEnabled: config.mcpToolCallingEnabled,
+          mcpToolCallingShortcut: config.mcpToolCallingShortcut,
+          speechShortcut: config.shortcut
+        })
       }
 
       if (e.data.key === "Escape" && state.isRecording) {
@@ -196,20 +213,6 @@ export function listenToKeyboardEvents() {
 
             showPanelWindowAndStartRecording()
           }, 800)
-
-          // Also handle MCP hold-ctrl if enabled and configured differently than speech-to-text
-          if (config.mcpToolCallingEnabled &&
-              config.mcpToolCallingShortcut === "hold-ctrl" &&
-              config.shortcut !== "hold-ctrl") {
-            if (startMcpTimer) {
-              return
-            }
-
-            startMcpTimer = setTimeout(() => {
-              isHoldingCtrlKeyForMcp = true
-              console.log("ready for MCP processing")
-            }, 1200) // Slightly longer delay to differentiate from recording
-          }
         } else {
           keysPressed.set(e.data.key, e.time.secs_since_epoch)
           cancelRecordingTimer()
@@ -222,11 +225,30 @@ export function listenToKeyboardEvents() {
 
           // when holding ctrl key for MCP, pressing any other key will trigger MCP processing
           if (isHoldingCtrlKeyForMcp) {
+            console.log("🚀 Triggering MCP shortcut (hold-ctrl + other key)")
             processMcpShortcut()
           }
 
           isHoldingCtrlKey = false
           isHoldingCtrlKeyForMcp = false
+        }
+      }
+
+      // Handle MCP hold-ctrl timer (independent of speech shortcuts)
+      if (config.mcpToolCallingEnabled && config.mcpToolCallingShortcut === "hold-ctrl") {
+        if (e.data.key === "ControlLeft") {
+          if (config.shortcut !== "hold-ctrl") {
+            // MCP uses different shortcut than speech
+            console.log("🔧 Setting up MCP hold-ctrl timer (different from speech)")
+            if (!startMcpTimer) {
+              startMcpTimer = setTimeout(() => {
+                isHoldingCtrlKeyForMcp = true
+                console.log("✅ Ready for MCP processing")
+              }, 1200) // Slightly longer delay to differentiate from recording
+            }
+          } else {
+            console.log("⚠️ MCP and speech both use hold-ctrl - will handle in release")
+          }
         }
       }
     } else if (e.event_type === "KeyRelease") {
@@ -237,13 +259,23 @@ export function listenToKeyboardEvents() {
       }
 
       const config = configStore.get()
-      if (config.shortcut === "ctrl-slash") return
+
+      // Only return early for ctrl-slash if we're not handling MCP
+      if (config.shortcut === "ctrl-slash" &&
+          !(config.mcpToolCallingEnabled && config.mcpToolCallingShortcut === "hold-ctrl")) {
+        return
+      }
 
       cancelRecordingTimer()
       cancelMcpTimer()
 
       if (e.data.key === "ControlLeft") {
-        console.log("release ctrl")
+        console.log("🔄 Release ctrl", {
+          isHoldingCtrlKey,
+          isHoldingCtrlKeyForMcp,
+          mcpEnabled: config.mcpToolCallingEnabled,
+          mcpShortcut: config.mcpToolCallingShortcut
+        })
 
         // Handle speech-to-text ctrl release
         if (isHoldingCtrlKey) {
@@ -254,6 +286,17 @@ export function listenToKeyboardEvents() {
 
         // Handle MCP ctrl release
         if (isHoldingCtrlKeyForMcp) {
+          console.log("🚀 Triggering MCP shortcut (hold-ctrl release)")
+          processMcpShortcut()
+        }
+
+        // Special case: if both MCP and speech use hold-ctrl, trigger MCP on release when not recording
+        if (config.mcpToolCallingEnabled &&
+            config.mcpToolCallingShortcut === "hold-ctrl" &&
+            config.shortcut === "hold-ctrl" &&
+            !isHoldingCtrlKey &&
+            !state.isRecording) {
+          console.log("🚀 Triggering MCP shortcut (same shortcut as speech, not recording)")
           processMcpShortcut()
         }
 
