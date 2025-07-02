@@ -6,6 +6,7 @@ import fs from "fs"
 import path from "path"
 import { app } from "electron"
 import { selectToolsWithLLM, AvailableTool } from "./mcp-tool-selection"
+import { processTranscriptWithLiteLLM } from "./litellm-mcp-client"
 
 export class McpClientManager {
   private clients: Map<string, Client> = new Map()
@@ -175,12 +176,22 @@ export class McpClientManager {
   async processTranscriptWithTools(transcript: string): Promise<string> {
     const config = configStore.get()
 
-    // Check if LLM-driven tool calling is enabled (we'll add this config option)
+    // Check if elegant LiteLLM MCP tool calling is enabled
+    const useLiteLLMToolCalling = config.mcpUseLiteLLM !== false // Default to true for elegant approach
+
+    if (useLiteLLMToolCalling) {
+      console.log("🚀 Using elegant LiteLLM MCP tool calling")
+      return processTranscriptWithLiteLLM(transcript)
+    }
+
+    // Fallback to legacy approaches
     const useLLMToolSelection = config.mcpLLMToolSelectionEnabled !== false // Default to true
 
     if (useLLMToolSelection) {
+      console.log("📋 Using legacy LLM tool selection")
       return this.processTranscriptWithLLMSelection(transcript)
     } else {
+      console.log("🔍 Using legacy heuristic tool selection")
       return this.processTranscriptWithHeuristics(transcript)
     }
   }

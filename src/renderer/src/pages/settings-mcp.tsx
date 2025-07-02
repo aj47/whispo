@@ -156,7 +156,24 @@ export function Component() {
           />
         </Control>
 
-        <Control label="LLM-Driven Tool Selection" className="px-3">
+        <Control label="Use Elegant LiteLLM MCP Integration" className="px-3">
+          <div className="space-y-2">
+            <Switch
+              defaultChecked={configQuery.data.mcpUseLiteLLM !== false}
+              onCheckedChange={(value) => {
+                saveConfig({
+                  mcpUseLiteLLM: value,
+                })
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Use the elegant LiteLLM-based MCP tool calling system for better performance and reliability.
+              When disabled, falls back to legacy tool selection methods.
+            </p>
+          </div>
+        </Control>
+
+        <Control label="Legacy LLM-Driven Tool Selection" className="px-3">
           <div className="space-y-2">
             <Switch
               defaultChecked={configQuery.data.mcpLLMToolSelectionEnabled !== false}
@@ -165,10 +182,13 @@ export function Component() {
                   mcpLLMToolSelectionEnabled: value,
                 })
               }}
+              disabled={configQuery.data.mcpUseLiteLLM !== false}
             />
             <p className="text-xs text-muted-foreground">
-              Use the post-processing LLM to intelligently select and configure MCP tools based on speech content.
-              When disabled, falls back to simple heuristic-based tool selection.
+              {configQuery.data.mcpUseLiteLLM !== false
+                ? "Disabled when using elegant LiteLLM integration above."
+                : "Use the post-processing LLM to intelligently select and configure MCP tools based on speech content. When disabled, falls back to simple heuristic-based tool selection."
+              }
             </p>
           </div>
         </Control>
