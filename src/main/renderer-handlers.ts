@@ -6,6 +6,7 @@ export type RendererHandlers = {
   stopRecording: () => void
   startOrFinishRecording: () => void
   refreshRecordingHistory: () => void
+  openMcpToolCalling: () => void
 
   updateAvailable: (e: UpdateDownloadedEvent) => void
   navigate: (url: string) => void

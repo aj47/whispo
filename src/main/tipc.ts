@@ -18,6 +18,7 @@ import { state } from "./state"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted, isMacSilicon } from "./utils"
 import { writeText } from "./keyboard"
+import { mcpService } from "./mcp-service"
 import { transcribeWithLightningWhisper, checkLightningWhisperDependencies, installLightningWhisperDependencies } from "./lightning-whisper-service"
 import { mcpClientManager } from "./mcp-client"
 
@@ -339,76 +340,29 @@ export const router = {
       updateTrayIcon()
     }),
 
-  // MCP Tool Calling Methods
-  connectToMcpServers: t.procedure.action(async () => {
-    try {
-      await mcpClientManager.connectToAllServers()
-      return { success: true }
-    } catch (error) {
-      console.error("Failed to connect to MCP servers:", error)
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
-    }
-  }),
-
-  disconnectFromMcpServers: t.procedure.action(async () => {
-    try {
-      await mcpClientManager.disconnectFromAllServers()
-      return { success: true }
-    } catch (error) {
-      console.error("Failed to disconnect from MCP servers:", error)
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
-    }
-  }),
-
-  getMcpServers: t.procedure.action(async () => {
-    return mcpClientManager.getConnectedServers()
-  }),
+  // MCP Tool Calling endpoints
+  initializeMcp: t.procedure
+    .input<{ configPath?: string }>()
+    .action(async ({ input }) => {
+      await mcpService.initialize(input.configPath)
+    }),
 
   getMcpTools: t.procedure.action(async () => {
-    try {
-      return await mcpClientManager.listAvailableTools()
-    } catch (error) {
-      console.error("Failed to get MCP tools:", error)
-      return []
-    }
+    return await mcpService.getAllTools()
   }),
 
   callMcpTool: t.procedure
-    .input<{ serverName: string; toolName: string; arguments: Record<string, any> }>()
+    .input<{ toolName: string; serverId: string; arguments: any }>()
     .action(async ({ input }) => {
-      try {
-        const result = await mcpClientManager.callTool(
-          input.serverName,
-          input.toolName,
-          input.arguments
-        )
-        return { success: true, result }
-      } catch (error) {
-        console.error("Failed to call MCP tool:", error)
-        return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
-      }
+      return await mcpService.callTool(input.toolName, input.serverId, input.arguments)
     }),
 
-  processTranscriptWithMcp: t.procedure
-    .input<{ transcript: string }>()
-    .action(async ({ input }) => {
-      try {
-        const processedTranscript = await mcpClientManager.processTranscriptWithTools(input.transcript)
-        return { success: true, transcript: processedTranscript }
-      } catch (error) {
-        console.error("Failed to process transcript with MCP:", error)
-        return { success: false, error: error instanceof Error ? error.message : "Unknown error", transcript: input.transcript }
-      }
-    }),
+  getMcpServers: t.procedure.action(async () => {
+    return mcpService.getConnectedServers()
+  }),
 
-  loadMcpServersConfig: t.procedure.action(async () => {
-    try {
-      const config = await mcpClientManager.loadServersConfig()
-      return { success: true, config }
-    } catch (error) {
-      console.error("Failed to load MCP servers config:", error)
-      return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
-    }
+  disconnectMcp: t.procedure.action(async () => {
+    await mcpService.disconnect()
   }),
 }
 

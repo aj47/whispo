@@ -1,5 +1,6 @@
 import { focusManager, QueryClient, useMutation, useQuery } from "@tanstack/react-query"
 import { tipcClient } from "./tipc-client"
+import { Config } from "@shared/types"
 
 focusManager.setEventListener((handleFocus) => {
   const handler = () => handleFocus()
@@ -47,3 +48,26 @@ export const useSaveConfigMutation = () => useMutation({
     })
   },
 })
+
+export const useMcpToolsQuery = () =>
+  useQuery({
+    queryKey: ["mcp-tools"],
+    queryFn: async () => {
+      return tipcClient.getMcpTools()
+    },
+  })
+
+export const useMcpServersQuery = () =>
+  useQuery({
+    queryKey: ["mcp-servers"],
+    queryFn: async () => {
+      return tipcClient.getMcpServers()
+    },
+  })
+
+export const useCallMcpToolMutation = () =>
+  useMutation({
+    mutationFn: async (input: { toolName: string; serverId: string; arguments: any }) => {
+      return tipcClient.callMcpTool(input)
+    },
+  })

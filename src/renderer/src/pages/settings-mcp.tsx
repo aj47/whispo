@@ -1,22 +1,27 @@
 import { Control, ControlGroup } from "@renderer/components/ui/control"
 import { Input } from "@renderer/components/ui/input"
 import { Switch } from "@renderer/components/ui/switch"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
 import { Button } from "@renderer/components/ui/button"
-import { Textarea } from "@renderer/components/ui/textarea"
 import {
   useConfigQuery,
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
-import { Config } from "@shared/types"
 import { tipcClient } from "@renderer/lib/tipc-client"
+import { Config } from "@shared/types"
 import { useState, useEffect } from "react"
-import { useQuery, useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 
 export function Component() {
   const configQuery = useConfigQuery()
   const saveConfigMutation = useSaveConfigMutation()
-  const [mcpServersJson, setMcpServersJson] = useState("")
-  const [isConnecting, setIsConnecting] = useState(false)
+  const [mcpServers, setMcpServers] = useState<Array<{ id: string; name: string; toolCount: number }>>([])
 
   const saveConfig = (config: Partial<Config>) => {
     saveConfigMutation.mutate({
@@ -27,72 +32,54 @@ export function Component() {
     })
   }
 
-  // Query for MCP servers status
-  const mcpServersQuery = useQuery({
-    queryKey: ["mcp-servers"],
-    queryFn: async () => {
-      return tipcClient.getMcpServers()
+  const initializeMcpMutation = useMutation({
+    mutationFn: async (configPath?: string) => {
+      await tipcClient.initializeMcp({ configPath })
+      return await tipcClient.getMcpServers()
     },
-    refetchInterval: 5000, // Refresh every 5 seconds
+    onSuccess: (servers) => {
+      setMcpServers(servers)
+    },
+    onError: (error) => {
+      console.error("Failed to initialize MCP:", error)
+    }
   })
 
-  // Query for MCP tools
   const mcpToolsQuery = useQuery({
     queryKey: ["mcp-tools"],
-    queryFn: async () => {
-      return tipcClient.getMcpTools()
-    },
-    enabled: (mcpServersQuery.data?.length || 0) > 0,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    queryFn: () => tipcClient.getMcpTools(),
+    enabled: configQuery.data?.mcpToolCallingEnabled === true,
+    refetchInterval: 30000, // Refetch every 30 seconds
   })
 
-  // Load MCP servers config
-  const loadConfigMutation = useMutation({
-    mutationFn: tipcClient.loadMcpServersConfig,
-    onSuccess: (data) => {
-      if (data.success && data.config) {
-        setMcpServersJson(JSON.stringify(data.config, null, 2))
+  const testMcpConnectionMutation = useMutation({
+    mutationFn: async () => {
+      const configPath = configQuery.data?.mcpServersConfigPath
+      if (!configPath) {
+        throw new Error("MCP servers config path not set")
       }
-    },
-  })
-
-  // Connect to MCP servers
-  const connectMutation = useMutation({
-    mutationFn: tipcClient.connectToMcpServers,
-    onMutate: () => {
-      setIsConnecting(true)
-    },
-    onSettled: () => {
-      setIsConnecting(false)
-      mcpServersQuery.refetch()
-      mcpToolsQuery.refetch()
-    },
-  })
-
-  // Disconnect from MCP servers
-  const disconnectMutation = useMutation({
-    mutationFn: tipcClient.disconnectFromMcpServers,
-    onSettled: () => {
-      mcpServersQuery.refetch()
-      mcpToolsQuery.refetch()
-    },
+      return await initializeMcpMutation.mutateAsync(configPath)
+    }
   })
 
   useEffect(() => {
-    loadConfigMutation.mutate()
-  }, [])
+    if (configQuery.data?.mcpToolCallingEnabled && configQuery.data?.mcpServersConfigPath) {
+      initializeMcpMutation.mutate(configQuery.data.mcpServersConfigPath)
+    }
+  }, [configQuery.data?.mcpToolCallingEnabled, configQuery.data?.mcpServersConfigPath])
 
   if (!configQuery.data) return null
 
-  const connectedServers = mcpServersQuery.data || []
-  const availableTools = mcpToolsQuery.data || []
+  const mcpToolCallingEnabled = configQuery.data.mcpToolCallingEnabled || false
+  const mcpToolCallingShortcut = configQuery.data.mcpToolCallingShortcut || "hold-alt"
+  const mcpServersConfigPath = configQuery.data.mcpServersConfigPath || ""
 
   return (
     <div className="grid gap-4">
       <ControlGroup title="MCP Tool Calling">
         <Control label="Enable MCP Tool Calling" className="px-3">
           <Switch
-            defaultChecked={configQuery.data.mcpToolCallingEnabled}
+            checked={mcpToolCallingEnabled}
             onCheckedChange={(value) => {
               saveConfig({
                 mcpToolCallingEnabled: value,
@@ -101,89 +88,85 @@ export function Component() {
           />
         </Control>
 
-        <Control label="MCP Shortcut Key" className="px-3">
-          <Input
-            placeholder="e.g., ctrl+shift+m"
-            defaultValue={configQuery.data.mcpToolCallingShortcut}
-            onChange={(e) => {
-              saveConfig({
-                mcpToolCallingShortcut: e.currentTarget.value,
-              })
-            }}
-          />
-        </Control>
-
-        <Control label="MCP Servers Config Path" className="px-3">
-          <Input
-            placeholder="Path to mcp-servers.json"
-            defaultValue={configQuery.data.mcpServersConfigPath}
-            onChange={(e) => {
-              saveConfig({
-                mcpServersConfigPath: e.currentTarget.value,
-              })
-            }}
-          />
-        </Control>
-      </ControlGroup>
-
-      <ControlGroup title="Server Management">
-        <Control label="Connection Status" className="px-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm">
-              {connectedServers.length > 0 
-                ? `Connected to ${connectedServers.length} server(s)` 
-                : "No servers connected"}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => connectMutation.mutate()}
-                disabled={isConnecting || connectMutation.isPending}
+        {mcpToolCallingEnabled && (
+          <>
+            <Control label="Tool Calling Shortcut" className="px-3">
+              <Select
+                value={mcpToolCallingShortcut}
+                onValueChange={(value) => {
+                  saveConfig({
+                    mcpToolCallingShortcut: value as typeof configQuery.data.mcpToolCallingShortcut,
+                  })
+                }}
               >
-                {isConnecting ? "Connecting..." : "Connect"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => disconnectMutation.mutate()}
-                disabled={disconnectMutation.isPending}
-              >
-                Disconnect
-              </Button>
-            </div>
-          </div>
-        </Control>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hold-alt">Hold Alt</SelectItem>
+                  <SelectItem value="alt-slash">Alt+/</SelectItem>
+                  <SelectItem value="ctrl-shift">Ctrl+Shift</SelectItem>
+                </SelectContent>
+              </Select>
+            </Control>
 
-        {connectedServers.length > 0 && (
-          <Control label="Connected Servers" className="px-3">
-            <div className="text-sm">
-              {connectedServers.map((server, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                  <span>{server}</span>
-                </div>
-              ))}
-            </div>
-          </Control>
+            <Control label="MCP Servers Config Path" className="px-3">
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="/path/to/mcp-servers-config.json"
+                  value={mcpServersConfigPath}
+                  onChange={(e) => {
+                    saveConfig({
+                      mcpServersConfigPath: e.currentTarget.value,
+                    })
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => testMcpConnectionMutation.mutate()}
+                  disabled={testMcpConnectionMutation.isPending || !mcpServersConfigPath}
+                >
+                  {testMcpConnectionMutation.isPending ? "Testing..." : "Test"}
+                </Button>
+              </div>
+            </Control>
+          </>
         )}
       </ControlGroup>
 
-      {availableTools.length > 0 && (
+      {mcpToolCallingEnabled && mcpServers.length > 0 && (
+        <ControlGroup title="Connected MCP Servers">
+          <div className="px-3 space-y-2">
+            {mcpServers.map((server) => (
+              <div key={server.id} className="flex justify-between items-center p-2 bg-neutral-50 dark:bg-neutral-800 rounded">
+                <div>
+                  <div className="font-medium">{server.name}</div>
+                  <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                    {server.toolCount} tools available
+                  </div>
+                </div>
+                <div className="text-xs text-green-600 dark:text-green-400">Connected</div>
+              </div>
+            ))}
+          </div>
+        </ControlGroup>
+      )}
+
+      {mcpToolCallingEnabled && mcpToolsQuery.data && mcpToolsQuery.data.length > 0 && (
         <ControlGroup title="Available Tools">
-          <div className="px-3">
-            {availableTools.map(({ serverName, tools }) => (
-              <div key={serverName} className="mb-4">
-                <h4 className="font-medium text-sm mb-2">{serverName}</h4>
-                <div className="space-y-1">
-                  {tools.map((tool: any, index: number) => (
-                    <div key={index} className="text-sm text-muted-foreground">
-                      <span className="font-mono">{tool.name}</span>
-                      {tool.description && (
-                        <span className="ml-2">- {tool.description}</span>
-                      )}
-                    </div>
-                  ))}
+          <div className="px-3 space-y-2 max-h-60 overflow-y-auto">
+            {mcpToolsQuery.data.map((tool) => (
+              <div key={`${tool.serverId}-${tool.name}`} className="p-2 bg-neutral-50 dark:bg-neutral-800 rounded">
+                <div className="font-medium">{tool.name}</div>
+                {tool.description && (
+                  <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                    {tool.description}
+                  </div>
+                )}
+                <div className="text-xs text-neutral-500 dark:text-neutral-500">
+                  Server: {tool.serverId}
                 </div>
               </div>
             ))}
@@ -191,58 +174,36 @@ export function Component() {
         </ControlGroup>
       )}
 
-      <ControlGroup title="Configuration">
-        <div className="px-3">
-          <div className="mb-2">
-            <label className="text-sm font-medium">MCP Servers Configuration</label>
-            <p className="text-xs text-muted-foreground mb-2">
-              JSON configuration for MCP servers. Save to file and set path above.
+      {mcpToolCallingEnabled && mcpServersConfigPath && (
+        <ControlGroup title="Configuration Help">
+          <div className="px-3 text-sm text-neutral-600 dark:text-neutral-400">
+            <p className="mb-2">
+              Create a JSON file with your MCP server configurations. Example:
             </p>
-          </div>
-          <Textarea
-            placeholder={`{
+            <pre className="bg-neutral-100 dark:bg-neutral-800 p-3 rounded text-xs overflow-x-auto">
+{`{
   "mcpServers": {
-    "example-server": {
-      "command": "node",
-      "args": ["path/to/server.js"],
+    "filesystem": {
+      "name": "File System Tools",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/directory"],
+      "description": "File system operations"
+    },
+    "brave-search": {
+      "name": "Brave Search",
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
       "env": {
-        "API_KEY": "your-api-key"
-      }
+        "BRAVE_API_KEY": "your-api-key-here"
+      },
+      "description": "Web search capabilities"
     }
   }
 }`}
-            value={mcpServersJson}
-            onChange={(e) => setMcpServersJson(e.target.value)}
-            className="font-mono text-xs"
-            rows={12}
-          />
-          <div className="mt-2 flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => loadConfigMutation.mutate()}
-              disabled={loadConfigMutation.isPending}
-            >
-              Load Config
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                try {
-                  const parsed = JSON.parse(mcpServersJson)
-                  console.log("Valid JSON:", parsed)
-                  alert("Configuration is valid JSON!")
-                } catch (error) {
-                  alert("Invalid JSON configuration!")
-                }
-              }}
-            >
-              Validate JSON
-            </Button>
+            </pre>
           </div>
-        </div>
-      </ControlGroup>
+        </ControlGroup>
+      )}
     </div>
   )
 }

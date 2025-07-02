@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "name": "File System Tools",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/username/Documents"],
+      "description": "File system operations for Documents folder"
+    },
+    "brave-search": {
+      "name": "Brave Search",
+      "command": "npx", 
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "your-brave-api-key-here"
+      },
+      "description": "Web search capabilities using Brave Search API"
+    },
+    "sqlite": {
+      "name": "SQLite Database",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sqlite", "/path/to/your/database.db"],
+      "description": "SQLite database operations"
+    },
+    "github": {
+      "name": "GitHub Integration",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "your-github-token-here"
+      },
+      "description": "GitHub repository and issue management"
+    },
+    "memory": {
+      "name": "Memory Storage",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "description": "Persistent memory storage for conversations"
+    }
+  }
+}

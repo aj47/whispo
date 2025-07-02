@@ -14,6 +14,8 @@ import { registerServeProtocol, registerServeSchema } from "./serve"
 import { createAppMenu } from "./menu"
 import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
+import { mcpService } from "./mcp-service"
+import { configStore } from "./config"
 
 registerServeSchema()
 
@@ -43,6 +45,12 @@ app.whenReady().then(() => {
   listenToKeyboardEvents()
 
   initTray()
+
+  // Initialize MCP service if enabled
+  const config = configStore.get()
+  if (config.mcpToolCallingEnabled && config.mcpServersConfigPath) {
+    mcpService.initialize(config.mcpServersConfigPath).catch(console.error)
+  }
 
   import("./updater").then((res) => res.init()).catch(console.error)
 
