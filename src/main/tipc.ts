@@ -11,13 +11,14 @@ import {
 } from "electron"
 import path from "path"
 import { configStore, recordingsFolder } from "./config"
-import { Config, RecordingHistoryItem } from "../shared/types"
+import { Config, RecordingHistoryItem, McpServerConfig, McpToolCallResult } from "../shared/types"
 import { RendererHandlers } from "./renderer-handlers"
 import { postProcessTranscript } from "./llm"
 import { state } from "./state"
 import { updateTrayIcon } from "./tray"
 import { isAccessibilityGranted, isMacSilicon } from "./utils"
 import { writeText } from "./keyboard"
+import { mcpClientManager } from "./mcp-client"
 import { transcribeWithLightningWhisper, checkLightningWhisperDependencies, installLightningWhisperDependencies } from "./lightning-whisper-service"
 
 const t = tipc.create()
@@ -337,6 +338,65 @@ export const router = {
       }
       updateTrayIcon()
     }),
+
+  // MCP-related handlers
+  getMcpServers: t.procedure.action(async () => {
+    const config = configStore.get()
+    return config.mcpServers || []
+  }),
+
+  saveMcpServers: t.procedure
+    .input<{ servers: McpServerConfig[] }>()
+    .action(async ({ input }) => {
+      const config = configStore.get()
+      configStore.save({
+        ...config,
+        mcpServers: input.servers,
+      })
+      // Refresh MCP connections
+      await mcpClientManager.refreshConnections()
+    }),
+
+  getMcpConnectedServers: t.procedure.action(async () => {
+    return mcpClientManager.getConnectedServers()
+  }),
+
+  listMcpTools: t.procedure
+    .input<{ serverName: string }>()
+    .action(async ({ input }) => {
+      try {
+        return await mcpClientManager.listAvailableTools(input.serverName)
+      } catch (error) {
+        throw new Error(`Failed to list tools: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }),
+
+  callMcpTool: t.procedure
+    .input<{
+      serverName: string
+      toolName: string
+      arguments: Record<string, any>
+      transcript: string
+    }>()
+    .action(async ({ input }): Promise<McpToolCallResult> => {
+      try {
+        return await mcpClientManager.callTool(
+          input.serverName,
+          input.toolName,
+          input.arguments,
+          input.transcript
+        )
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }),
+
+  initializeMcpConnections: t.procedure.action(async () => {
+    await mcpClientManager.initializeConnections()
+  }),
 }
 
 export type Router = typeof router

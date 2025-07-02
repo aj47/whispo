@@ -26,6 +26,10 @@ export const router: ReturnType<typeof createBrowserRouter> =
               path: "data",
               lazy: () => import("./pages/settings-data"),
             },
+            {
+              path: "mcp",
+              lazy: () => import("./pages/settings-mcp"),
+            },
           ],
         },
         {

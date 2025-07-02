@@ -7,6 +7,20 @@ export type RecordingHistoryItem = {
   transcript: string
 }
 
+export type McpServerConfig = {
+  name: string
+  command: string
+  args: string[]
+  env?: Record<string, string>
+  enabled: boolean
+}
+
+export type McpToolCallResult = {
+  success: boolean
+  content?: string
+  error?: string
+}
+
 export type Config = {
   shortcut?: "hold-ctrl" | "ctrl-slash"
   hideDockIcon?: boolean
@@ -33,4 +47,8 @@ export type Config = {
   transcriptPostProcessingOpenaiModel?: string
   transcriptPostProcessingGroqModel?: string
   transcriptPostProcessingGeminiModel?: string
+
+  // MCP Configuration
+  mcpToolCallEnabled?: boolean
+  mcpServers?: McpServerConfig[]
 }

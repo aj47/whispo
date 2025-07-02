@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from "@renderer/components/ui/tooltip"
 import { playSound } from "@renderer/lib/sound"
+import { McpToolButton } from "@renderer/components/mcp-tool-button"
 
 export function Component() {
   const historyQuery = useQuery({
@@ -141,6 +142,8 @@ export function Component() {
                         </div>
                         <div className="flex shrink-0 gap-2 text-sm">
                           <PlayButton id={item.id} />
+
+                          <McpToolButton transcript={item.transcript} />
 
                           <DeleteButton id={item.id} />
                         </div>

@@ -14,6 +14,7 @@ import { registerServeProtocol, registerServeSchema } from "./serve"
 import { createAppMenu } from "./menu"
 import { initTray } from "./tray"
 import { isAccessibilityGranted } from "./utils"
+import { mcpClientManager } from "./mcp-client"
 
 registerServeSchema()
 
@@ -37,6 +38,9 @@ app.whenReady().then(() => {
   } else {
     createSetupWindow()
   }
+
+  // Initialize MCP connections
+  mcpClientManager.initializeConnections().catch(console.error)
 
   createPanelWindow()
 
@@ -77,6 +81,10 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit()
   }
+})
+
+app.on("before-quit", async () => {
+  await mcpClientManager.cleanup()
 })
 
 // In this file you can include the rest of your app"s specific main process

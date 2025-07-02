@@ -39,6 +39,21 @@ export const useIsMacSiliconQuery = () => useQuery({
   },
 })
 
+export const useMcpServersQuery = () => useQuery({
+  queryKey: ["mcp-servers"],
+  queryFn: async () => {
+    return tipcClient.getMcpServers()
+  },
+})
+
+export const useMcpConnectedServersQuery = () => useQuery({
+  queryKey: ["mcp-connected-servers"],
+  queryFn: async () => {
+    return tipcClient.getMcpConnectedServers()
+  },
+  refetchInterval: 5000,
+})
+
 export const useSaveConfigMutation = () => useMutation({
   mutationFn: tipcClient.saveConfig,
   onSuccess() {

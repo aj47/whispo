@@ -1,0 +1,27 @@
+{
+  "mcpServers": [
+    {
+      "name": "filesystem",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+      "env": {},
+      "enabled": false
+    },
+    {
+      "name": "brave-search",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY_HERE"
+      },
+      "enabled": false
+    },
+    {
+      "name": "git",
+      "command": "python",
+      "args": ["-m", "mcp_server_git", "--repository", "."],
+      "env": {},
+      "enabled": false
+    }
+  ]
+}

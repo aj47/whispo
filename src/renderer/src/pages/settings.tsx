@@ -16,6 +16,10 @@ export function Component() {
       href: "/settings/data",
     },
     {
+      text: "MCP",
+      href: "/settings/mcp",
+    },
+    {
       text: "About",
       href: "/settings/about",
     },
