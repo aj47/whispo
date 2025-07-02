@@ -4,6 +4,13 @@ import { Switch } from "@renderer/components/ui/switch"
 import { Button } from "@renderer/components/ui/button"
 import { Textarea } from "@renderer/components/ui/textarea"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@renderer/components/ui/select"
+import {
   useConfigQuery,
   useSaveConfigMutation,
 } from "@renderer/lib/query-client"
@@ -56,6 +63,23 @@ export function Component() {
     },
   })
 
+  // Save MCP servers config
+  const saveMcpConfigMutation = useMutation({
+    mutationFn: async (config: string) => {
+      return tipcClient.saveMcpServersConfig({ config })
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        alert(`Configuration saved successfully to: ${data.path}`)
+      } else {
+        alert(`Failed to save configuration: ${data.error}`)
+      }
+    },
+    onError: (error) => {
+      alert(`Error saving configuration: ${error}`)
+    },
+  })
+
   // Connect to MCP servers
   const connectMutation = useMutation({
     mutationFn: tipcClient.connectToMcpServers,
@@ -102,15 +126,22 @@ export function Component() {
         </Control>
 
         <Control label="MCP Shortcut Key" className="px-3">
-          <Input
-            placeholder="e.g., ctrl+shift+m"
-            defaultValue={configQuery.data.mcpToolCallingShortcut}
-            onChange={(e) => {
+          <Select
+            defaultValue={configQuery.data.mcpToolCallingShortcut || "hold-ctrl"}
+            onValueChange={(value) => {
               saveConfig({
-                mcpToolCallingShortcut: e.currentTarget.value,
+                mcpToolCallingShortcut: value as typeof configQuery.data.mcpToolCallingShortcut,
               })
             }}
-          />
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hold-ctrl">Hold Ctrl</SelectItem>
+              <SelectItem value="ctrl-slash">Ctrl+{"/"}</SelectItem>
+            </SelectContent>
+          </Select>
         </Control>
 
         <Control label="MCP Servers Config Path" className="px-3">
@@ -130,8 +161,8 @@ export function Component() {
         <Control label="Connection Status" className="px-3">
           <div className="flex items-center gap-2">
             <span className="text-sm">
-              {connectedServers.length > 0 
-                ? `Connected to ${connectedServers.length} server(s)` 
+              {connectedServers.length > 0
+                ? `Connected to ${connectedServers.length} server(s)`
                 : "No servers connected"}
             </span>
             <div className="flex gap-2">
@@ -224,6 +255,21 @@ export function Component() {
               disabled={loadConfigMutation.isPending}
             >
               Load Config
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                try {
+                  JSON.parse(mcpServersJson) // Validate JSON
+                  saveMcpConfigMutation.mutate(mcpServersJson)
+                } catch (error) {
+                  alert("Invalid JSON configuration! Please fix the JSON before saving.")
+                }
+              }}
+              disabled={saveMcpConfigMutation.isPending}
+            >
+              {saveMcpConfigMutation.isPending ? "Saving..." : "Save Config"}
             </Button>
             <Button
               variant="outline"

@@ -36,7 +36,7 @@ export type Config = {
 
   // MCP Tool Calling Configuration
   mcpToolCallingEnabled?: boolean
-  mcpToolCallingShortcut?: string
+  mcpToolCallingShortcut?: "hold-ctrl" | "ctrl-slash"
   mcpServersConfigPath?: string
 }
 

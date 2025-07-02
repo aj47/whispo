@@ -20,11 +20,26 @@ The MCP tool calling feature allows Whispo to process transcribed text through e
 
 1. Go to Settings → MCP Tools
 2. Toggle "Enable MCP Tool Calling" to ON
-3. Optionally set a custom shortcut key
+3. Set the shortcut key (same options as speech-to-text: "Hold Ctrl" or "Ctrl+/")
 4. Configure the path to your MCP servers configuration file
+
+**Shortcut Key Behavior:**
+- **Hold Ctrl**: Hold the Ctrl key to prepare for MCP processing, then press any other key to process clipboard content
+- **Ctrl+/**: Press Ctrl+/ to immediately process clipboard content with MCP tools
+- The processed text will replace the clipboard content and be typed into the active window (if accessibility permissions are granted)
 
 ### 2. MCP Servers Configuration
 
+You can configure MCP servers in two ways:
+
+**Option A: Using the built-in editor (Recommended)**
+1. In Settings → MCP Tools, scroll to the "Configuration" section
+2. Edit the JSON configuration directly in the textarea
+3. Click "Validate JSON" to check for syntax errors
+4. Click "Save Config" to save the configuration to a file
+5. The configuration will be automatically saved to the default location or your specified path
+
+**Option B: Manual file creation**
 Create a JSON file with your MCP server configurations:
 
 ```json
@@ -60,9 +75,15 @@ Create a JSON file with your MCP server configurations:
 
 ### 3. Server Management
 
-- Use the "Connect" button to connect to all configured servers
-- Use the "Disconnect" button to disconnect from all servers
-- View connected servers and available tools in the settings page
+1. **Configure servers**: Edit the JSON configuration in the textarea and click "Save Config"
+2. **Load existing config**: Click "Load Config" to load configuration from the specified file path
+3. **Connect to servers**: Use the "Connect" button to connect to all configured servers
+4. **Disconnect**: Use the "Disconnect" button to disconnect from all servers
+5. **Monitor status**: View connected servers and available tools in the settings page
+
+**Workflow:**
+1. Edit JSON configuration → Save Config → Connect → Test tools
+2. Or: Load Config → Connect → Test tools
 
 ## Usage
 
@@ -150,9 +171,9 @@ server.registerTool("enhance_text", {
   description: "Enhance and improve text quality",
   inputSchema: { text: z.string() }
 }, async ({ text }) => ({
-  content: [{ 
-    type: "text", 
-    text: `Enhanced: ${text.toUpperCase()}` 
+  content: [{
+    type: "text",
+    text: `Enhanced: ${text.toUpperCase()}`
   }]
 }));
 

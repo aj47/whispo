@@ -401,6 +401,33 @@ export const router = {
       }
     }),
 
+  processClipboardWithMcp: t.procedure.action(async () => {
+    try {
+      const clipboardText = clipboard.readText()
+      if (!clipboardText.trim()) {
+        return { success: false, error: "Clipboard is empty", transcript: "" }
+      }
+
+      const processedText = await mcpClientManager.processTranscriptWithTools(clipboardText)
+
+      // Write the processed text back to clipboard and try to write to active window
+      clipboard.writeText(processedText)
+      if (isAccessibilityGranted()) {
+        try {
+          await writeText(processedText)
+        } catch (error) {
+          console.error(`Failed to write processed text:`, error)
+          // Don't throw here, still return success since clipboard was updated
+        }
+      }
+
+      return { success: true, transcript: processedText }
+    } catch (error) {
+      console.error("Failed to process clipboard with MCP:", error)
+      return { success: false, error: error instanceof Error ? error.message : "Unknown error", transcript: "" }
+    }
+  }),
+
   loadMcpServersConfig: t.procedure.action(async () => {
     try {
       const config = await mcpClientManager.loadServersConfig()
@@ -410,6 +437,42 @@ export const router = {
       return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
     }
   }),
+
+  saveMcpServersConfig: t.procedure
+    .input<{ config: string }>()
+    .action(async ({ input }) => {
+      try {
+        // Parse the JSON to validate it
+        const parsedConfig = JSON.parse(input.config)
+
+        // Get the configured path or use default
+        const appConfig = configStore.get()
+        let configPath = appConfig.mcpServersConfigPath
+
+        if (!configPath) {
+          // Use default path
+          configPath = path.join(app.getPath("appData"), process.env.APP_ID, "mcp-servers.json")
+
+          // Update the app config with the default path
+          configStore.save({
+            ...appConfig,
+            mcpServersConfigPath: configPath
+          })
+        }
+
+        // Ensure directory exists
+        const configDir = path.dirname(configPath)
+        fs.mkdirSync(configDir, { recursive: true })
+
+        // Write the config file
+        fs.writeFileSync(configPath, JSON.stringify(parsedConfig, null, 2), 'utf8')
+
+        return { success: true, path: configPath }
+      } catch (error) {
+        console.error("Failed to save MCP servers config:", error)
+        return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+      }
+    }),
 }
 
 export type Router = typeof router

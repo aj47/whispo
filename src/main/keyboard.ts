@@ -56,6 +56,37 @@ export const writeText = (text: string) => {
   })
 }
 
+const processMcpShortcut = async () => {
+  try {
+    const { mcpClientManager } = await import("./mcp-client")
+    const { clipboard } = await import("electron")
+    const { isAccessibilityGranted } = await import("./utils")
+
+    const clipboardText = clipboard.readText()
+    if (!clipboardText.trim()) {
+      console.log("MCP shortcut triggered but clipboard is empty")
+      return
+    }
+
+    console.log("Processing clipboard content with MCP tools")
+    const processedText = await mcpClientManager.processTranscriptWithTools(clipboardText)
+
+    // Write the processed text back to clipboard and try to write to active window
+    clipboard.writeText(processedText)
+    if (isAccessibilityGranted()) {
+      try {
+        await writeText(processedText)
+      } catch (error) {
+        console.error(`Failed to write processed text:`, error)
+      }
+    }
+
+    console.log("MCP processing completed")
+  } catch (error) {
+    console.error("Failed to process clipboard with MCP:", error)
+  }
+}
+
 const parseEvent = (event: any) => {
   try {
     const e = JSON.parse(String(event))
@@ -88,6 +119,8 @@ export function listenToKeyboardEvents() {
   let isHoldingCtrlKey = false
   let startRecordingTimer: NodeJS.Timeout | undefined
   let isPressedCtrlKey = false
+  let isHoldingCtrlKeyForMcp = false
+  let startMcpTimer: NodeJS.Timeout | undefined
 
   if (process.env.IS_MAC) {
     if (!systemPreferences.isTrustedAccessibilityClient(false)) {
@@ -99,6 +132,13 @@ export function listenToKeyboardEvents() {
     if (startRecordingTimer) {
       clearTimeout(startRecordingTimer)
       startRecordingTimer = undefined
+    }
+  }
+
+  const cancelMcpTimer = () => {
+    if (startMcpTimer) {
+      clearTimeout(startMcpTimer)
+      startMcpTimer = undefined
     }
   }
 
@@ -117,11 +157,25 @@ export function listenToKeyboardEvents() {
         return
       }
 
-      if (configStore.get().shortcut === "ctrl-slash") {
+      // Handle MCP shortcuts
+      const config = configStore.get()
+      if (config.mcpToolCallingEnabled && config.mcpToolCallingShortcut) {
+        if (config.mcpToolCallingShortcut === "ctrl-slash") {
+          if (e.data.key === "Slash" && isPressedCtrlKey) {
+            processMcpShortcut()
+            return
+          }
+        }
+        // Note: hold-ctrl for MCP will be handled in the KeyRelease section
+      }
+
+      // Handle speech-to-text shortcuts
+      if (config.shortcut === "ctrl-slash") {
         if (e.data.key === "Slash" && isPressedCtrlKey) {
           getWindowRendererHandlers("panel")?.startOrFinishRecording.send()
         }
       } else {
+        // Handle hold-ctrl for speech-to-text
         if (e.data.key === "ControlLeft") {
           if (hasRecentKeyPress()) {
             console.log("ignore ctrl because other keys are pressed", [
@@ -142,16 +196,37 @@ export function listenToKeyboardEvents() {
 
             showPanelWindowAndStartRecording()
           }, 800)
+
+          // Also handle MCP hold-ctrl if enabled and configured differently than speech-to-text
+          if (config.mcpToolCallingEnabled &&
+              config.mcpToolCallingShortcut === "hold-ctrl" &&
+              config.shortcut !== "hold-ctrl") {
+            if (startMcpTimer) {
+              return
+            }
+
+            startMcpTimer = setTimeout(() => {
+              isHoldingCtrlKeyForMcp = true
+              console.log("ready for MCP processing")
+            }, 1200) // Slightly longer delay to differentiate from recording
+          }
         } else {
           keysPressed.set(e.data.key, e.time.secs_since_epoch)
           cancelRecordingTimer()
+          cancelMcpTimer()
 
           // when holding ctrl key, pressing any other key will stop recording
           if (isHoldingCtrlKey) {
             stopRecordingAndHidePanelWindow()
           }
 
+          // when holding ctrl key for MCP, pressing any other key will trigger MCP processing
+          if (isHoldingCtrlKeyForMcp) {
+            processMcpShortcut()
+          }
+
           isHoldingCtrlKey = false
+          isHoldingCtrlKeyForMcp = false
         }
       }
     } else if (e.event_type === "KeyRelease") {
@@ -161,19 +236,29 @@ export function listenToKeyboardEvents() {
         isPressedCtrlKey = false
       }
 
-      if (configStore.get().shortcut === "ctrl-slash") return
+      const config = configStore.get()
+      if (config.shortcut === "ctrl-slash") return
 
       cancelRecordingTimer()
+      cancelMcpTimer()
 
       if (e.data.key === "ControlLeft") {
         console.log("release ctrl")
+
+        // Handle speech-to-text ctrl release
         if (isHoldingCtrlKey) {
           getWindowRendererHandlers("panel")?.finishRecording.send()
         } else {
           stopRecordingAndHidePanelWindow()
         }
 
+        // Handle MCP ctrl release
+        if (isHoldingCtrlKeyForMcp) {
+          processMcpShortcut()
+        }
+
         isHoldingCtrlKey = false
+        isHoldingCtrlKeyForMcp = false
       }
     }
   }

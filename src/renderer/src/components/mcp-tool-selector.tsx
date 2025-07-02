@@ -96,7 +96,7 @@ export function McpToolSelector({ transcript, className }: McpToolSelectorProps)
   }
 
   // Find selected tool data
-  let selectedToolData = null
+  let selectedToolData: any = null
   if (selectedServerTool) {
     const [serverName, toolName] = selectedServerTool.split(':')
     const server = availableServers.find(s => s.serverName === serverName)
