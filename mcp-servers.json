@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "groq-mcp": {
+      "command": "python3",
+      "args": ["server.py"],
+      "cwd": "groq-mcp-server"
+    }
+  }
+}
