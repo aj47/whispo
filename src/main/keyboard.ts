@@ -10,12 +10,26 @@ import { configStore } from "./config"
 import { state } from "./state"
 import { spawn, ChildProcess } from "child_process"
 import path from "path"
+import { isAccessibilityGranted } from "./utils"
+
+let binaryName: string;
+
+switch (process.platform) {
+  case 'darwin': // This is macOS
+    binaryName = 'speakmcp-rs-mac';
+    break;
+  case 'win32': // This is Windows
+    binaryName = 'speakmcp-rs.exe';
+    break;
+  case 'linux': // This is Linux
+    binaryName = 'speakmcp-rs';
+    break;
+  default:
+    throw new Error(`Unsupported platform for rdev: ${process.platform}`);
+}
 
 const rdevPath = path
-  .join(
-    __dirname,
-    `../../resources/bin/speakmcp-rs${process.env.IS_MAC ? "" : ".exe"}`,
-  )
+  .join(__dirname, `../../resources/bin/${binaryName}`)
   .replace("app.asar", "app.asar.unpacked")
 
 type RdevEvent = {
@@ -95,10 +109,8 @@ export function listenToKeyboardEvents() {
   let startMcpRecordingTimer: NodeJS.Timeout | undefined
   let isPressedCtrlAltKey = false
 
-  if (process.env.IS_MAC) {
-    if (!systemPreferences.isTrustedAccessibilityClient(false)) {
-      return
-    }
+  if (!isAccessibilityGranted()) {
+    return
   }
 
   const cancelRecordingTimer = () => {

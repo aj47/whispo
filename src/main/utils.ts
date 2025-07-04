@@ -1,7 +1,10 @@
 import { systemPreferences } from "electron"
 
 export const isAccessibilityGranted = () => {
-  if (process.platform === "win32") return true
+  // Only run accessibility check on macOS
+  if (process.platform !== "darwin") {
+    return true
+  }
 
   return systemPreferences.isTrustedAccessibilityClient(false)
 }
